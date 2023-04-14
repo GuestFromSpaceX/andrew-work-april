@@ -2,7 +2,17 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
+use Symfony\Component\Serializer\Annotation\Groups;
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Put;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Post;
 use App\Repository\ImageRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -10,31 +20,56 @@ use Symfony\Component\HttpFoundation\File\File;
 use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
 #[ORM\Entity(repositoryClass: ImageRepository::class)]
-#[ApiResource]
+#[ORM\HasLifecycleCallbacks()]
+#[ApiResource(
+    normalizationContext: ['groups' => ['read']],
+    denormalizationContext: ['groups' => ['write']],
+    operations: [
+        new Get(),
+        new GetCollection(paginationItemsPerPage: 2,
+        paginationMaximumItemsPerPage: 5),
+        new Put(),
+        new Patch(),
+        new Delete(),
+        new Post()
+    ]
+)]
 #[Vich\Uploadable]
+#[ApiFilter(SearchFilter::class, properties: ['id' => 'partial', 'imageCreationDate' => 'ipartial'])]
+#[ApiFilter(OrderFilter::class, properties: ['id', 'imageCreationDate'])]
 
 class Image
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups('read')]
     private ?int $id = null;
 
+//    #[Groups('read')]
     #[Vich\UploadableField(mapping: 'images', fileNameProperty: 'imageName')]
     private ?File $imageFile = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['read', 'write'])]
     private ?string $imageName = null;
 
     #[ORM\Column(nullable: true)]
-    private ?\DateTimeImmutable $updatedAt = null;
+    #[Groups('read')]
+    private ?\DateTimeImmutable $imageUpdatingDate = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups('read')]
+    private ?\DateTimeImmutable $imageCreationDate = null;
 
     #[ORM\Column(length: 255)]
     #[ORM\JoinColumn(nullable: true)]
+    #[Groups('read')]
     private ?string $imagePath = null;
 
-    #[ORM\ManyToOne(inversedBy: 'user_reletion_to_images')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\ManyToOne(inversedBy: 'images')]
+    #[ORM\JoinColumn(name: 'user_id', referencedColumnName: 'id', nullable: false)]
+    #[Groups('read')]
     private ?User $user = null;
 
     public function getId(): ?int
@@ -58,7 +93,7 @@ class Image
         if (null !== $imageFile) {
             // It is required that at least one field changes if you are using doctrine
             // otherwise the event listeners won't be called and the file is lost
-            $this->updatedAt = new \DateTimeImmutable();
+            $this->imageUpdatingDate = new \DateTimeImmutable();
         }
     }
 
@@ -102,4 +137,28 @@ class Image
 
         return $this;
     }
+
+    public function getImageUpdatingDate(): ?\DateTimeImmutable
+    {
+        return $this->imageUpdatingDate;
+    }
+
+    #[ORM\PreUpdate]
+    public function onUpdate(): void
+    {
+        $this->imageUpdatingDate = new \DateTimeImmutable();
+    }
+
+    public function getImageCreationDate(): ?\DateTimeImmutable
+    {
+        return $this->imageCreationDate;
+    }
+
+    #[ORM\PrePersist]
+    public function onCreate(): void
+    {
+        $this->imageCreationDate = new \DateTimeImmutable();
+
+    }
+
 }

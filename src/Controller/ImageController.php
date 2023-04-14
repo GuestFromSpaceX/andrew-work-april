@@ -3,8 +3,10 @@
 namespace App\Controller;
 
 use App\Entity\Image;
+use App\Entity\User;
 use App\Form\ImageType;
 use Doctrine\ORM\EntityManagerInterface;
+use Vich\UploaderBundle\Templating\Helper\UploaderHelper;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -20,11 +22,15 @@ class ImageController extends AbstractController
     }
 
         // Обрабатывает запросы GET и POST по адресу /images/upload
-        #[Route('/images/upload', name: 'image_upload', methods: ['GET', 'POST'])]
-        public function upload(Request $request): Response
+        #[Route('/images/upload/{user_id}', name: 'image_upload', methods: ['GET', 'POST'])]
+        public function upload(Request $request, int $user_id, UploaderHelper $helper): Response
         {
             // Создаем новый экземпляр Image
             $image = new Image();
+            
+            // Получаем пользователя по его ID и связываем его с изображением
+            $user = $this->entityManager->getRepository(User::class)->find($user_id);
+            $image->setRelation($user);
     
             // Создаем форму с использованием класса ImageType
             $form = $this->createForm(ImageType::class, $image);
@@ -33,8 +39,6 @@ class ImageController extends AbstractController
             $form->handleRequest($request);
 
             if ($form->isSubmitted() && $form->isValid()) {
-    
-                
 
                 // Получаем путь к загруженному изображению
                 $imagePath = $form['imageFile']->getData()->getRealPath();
@@ -53,6 +57,7 @@ class ImageController extends AbstractController
             // Отображаем форму загрузки изображения
             return $this->render('image/upload.html.twig', [
                 'form' => $form->createView(),
+                'user_id' => $user_id, // передаем в шаблон
             ]);
         }
 
